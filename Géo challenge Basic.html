@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Géo-Stratégie V8 - Ultimate</title>
+    <style>
+        /* 1. VARIABLES DE COULEURS */
+        :root { 
+            --primary: #1a1a2e;    /* Bleu Nuit Profond */
+            --secondary: #16213e;  /* Bleu sombre de la zone de jeu */
+            --accent: #0f3460;     /* Bleu plus clair (Boutons/Sidebar) */
+            --gold: #f1c40f;       /* Or (Titres/Scores) */
+            --text: #e94560;       /* Rouge (Boutons sélectionnés/Accentuation) */
+            --light: #f1f1f1;      /* Gris clair (Texte général) */
+            --green: #27ae60;      /* Vert (Succès/Lancer) */
+        }
+
+        /* 2. MISE EN PAGE GÉNÉRALE */
+        body { 
+            font-family: 'Segoe UI', Tahoma, sans-serif; 
+            background: var(--primary); 
+            color: var(--light);
+            margin: 0; padding: 0; 
+            display: flex; justify-content: center; 
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        #app-layout { 
+            display: flex; 
+            width: 100vw; 
+            max-width: 1300px; 
+            margin: auto; 
+            gap: 20px; 
+            padding: 15px;
+            box-sizing: border-box;
+        }
+        
+        #main-game { 
+            flex: 2; 
+            background: var(--secondary); 
+            border-radius: 20px; 
+            padding: 25px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+            text-align: center; 
+        }
+        
+        #sidebar { 
+            flex: 0.9; 
+            background: var(--accent); 
+            border-radius: 20px; 
+            padding: 20px; 
+            display: flex; flex-direction: column; 
+            border: 1px solid rgba(255,255,255,0.1); 
+            max-height: 90vh; 
+            overflow-y: auto;
+        }
+
+        /* 3. MODE MOBILE (Empilement vertical) */
+        @media (max-width: 900px) {
+            body { overflow-y: auto; display: block; }
+            #app-layout { flex-direction: column; height: auto; padding: 10px; }
+            #main-game { width: 100%; box-sizing: border-box; margin-bottom: 20px; }
+            #sidebar { width: 100%; flex: none; max-height: 400px; }
+            .grid-buttons { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+
+        /* 4. ÉLÉMENTS DE JEU */
+        #category-info-box {
+            background: rgba(241, 196, 15, 0.1);
+            border: 1px solid var(--gold);
+            color: var(--gold);
+            padding: 15px; border-radius: 8px; margin-bottom: 20px;
+        }
+
+        .grid-buttons { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); 
+            gap: 12px; 
+        }
+        
+        button { 
+            background: var(--accent); 
+            color: white; 
+            border: 1px solid var(--text); 
+            padding: 12px; border-radius: 10px; 
+            cursor: pointer; transition: 0.2s; 
+            font-weight: bold; 
+        }
+
+        button:hover:not(:disabled) { background: var(--text); transform: translateY(-2px); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; }
+        button.selected { background: var(--text); border-color: var(--light); box-shadow: 0 0 10px var(--text); }
+
+        .flag-big { font-size: 4rem; margin-bottom: 5px; }
+        .name-big { font-size: 2rem; font-weight: 900; color: var(--gold); }
+
+        /* 5. HISTORIQUE ET FEEDBACK */
+        .history-item { 
+            background: rgba(255,255,255,0.05); 
+            margin-bottom: 12px; padding: 10px; 
+            border-radius: 8px; font-size: 0.85em; 
+            border-left: 4px solid var(--text); 
+            text-align: left;
+        }
+        .best-choice { color: var(--green); font-weight: bold; margin-top: 5px; }
+
+        .screen { display: none; }
+        .active { display: block; }
+    </style>
+</head>
+<body>
+
+<div id="app-layout">
+    <div id="main-game">
+        <h1 style="color:var(--text); margin-top:0;">GÉO-STRATÉGIE <span style="color:white">V8</span></h1>
+
+        <div id="screen-setup" class="screen active">
+            <div id="category-info-box">ℹ️ Sélectionnez 6 catégories pour commencer.</div>
+            <div id="selection-count" style="color:var(--gold); margin-bottom:10px; font-weight:bold;">0 / 6 sélectionnées</div>
+            <div id="setup-buttons" class="grid-buttons"></div>
+            <button id="start-btn" onclick="startGame()" style="margin-top:20px; width:100%; background:var(--green); display:none; border:none; font-size:1.2em; padding:15px;">LANCER LA MISSION</button>
+        </div>
+
+        <div id="screen-game" class="screen">
+            <div style="display:flex; justify-content: space-between; font-weight: bold; color: var(--gold); margin-bottom:10px;">
+                <span>TOUR <span id="ui-tour">1</span>/6</span>
+                <span>SCORE: <span id="ui-score">0</span> pts</span>
+            </div>
+            <div id="country-display">
+                <div id="country-flag" class="flag-big">🌍</div>
+                <div id="country-name" class="name-big">???</div>
+            </div>
+            <div id="game-buttons" class="grid-buttons"></div>
+            <div id="ui-feedback" style="margin-top:20px; font-weight:bold; color:var(--gold);"></div>
+        </div>
+
+        <div id="screen-end" class="screen">
+            <h2 style="color:var(--gold)">MISSION TERMINÉE</h2>
+            <div id="final-score" style="font-size: 80px; color:var(--green); font-weight:bold;"></div>
+            <div id="final-verdict" style="margin-bottom:20px;"></div>
+            <button onclick="location.reload()" style="background:var(--text); padding:15px 30px;">REJOUER</button>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <h3 style="text-align:center; border-bottom: 1px solid var(--text); padding-bottom:10px; color:var(--gold);">ANALYSE TACTIQUE</h3>
+        <div id="history-list"></div>
+    </div>
+</div>
+
+<script>
+// --- DONNÉES COMPLÈTES (185 Pays) ---
+// Structure: [Nom, Emoji, Pop, Superficie, PIB, IDH, Tourisme, Foot, Rail, Foret, CO2, Sommet, UNESCO, Dette, Fecondite, Prison, AgeChef, Densite]
+const rawData = [
+["Afghanistan", "🇦🇫", 41000000, 652230, 14, 0.478, 0.02, 1100, 466, 1.8, 12100, 7492, 2, 600, 4.5, 30000, 65, 63],
+["Albanie", "🇦🇱", 2800000, 28748, 18, 0.796, 6.4, 1400, 677, 28.8, 4300, 2764, 4, 5100, 1.4, 5200, 59, 97],
+["Algérie", "🇩🇿", 45500000, 2381741, 195, 0.745, 2.5, 1650, 4200, 0.8, 171000, 3003, 7, 1200, 3.0, 60000, 78, 19],
+["Allemagne", "🇩🇪", 84000000, 357022, 4260, 0.95, 28.4, 1724, 33440, 31.7, 804701, 2963, 54, 33349, 1.5, 64193, 67, 236],
+["Andorre", "🇦🇩", 77000, 468, 3, 0.858, 8.0, 153, 0, 34.0, 460, 2942, 1, 0, 1.0, 60, 49, 164],
+["Angola", "🇦🇴", 35000000, 1246700, 122, 0.581, 0.2, 1400, 2852, 46.3, 30000, 2620, 1, 800, 5.2, 25000, 69, 28],
+["Antigua-et-Barbuda", "🇦🇬", 100000, 442, 1, 0.778, 0.3, 1100, 0, 22.3, 500, 402, 1, 13000, 1.9, 300, 75, 226],
+["Argentine", "🇦🇷", 46000000, 2780400, 630, 0.842, 7.4, 1, 36917, 10.7, 180000, 6961, 11, 8500, 1.9, 110000, 64, 16],
+["Arménie", "🇦🇲", 2800000, 29743, 21, 0.776, 1.9, 1350, 780, 11.7, 6000, 4090, 3, 5100, 1.6, 2200, 40, 94],
+["Australie", "🇦🇺", 26000000, 7692024, 1700, 0.951, 9.5, 30, 33168, 17.4, 400000, 2228, 20, 30000, 1.6, 42000, 60, 3],
+["Autriche", "🇦🇹", 9000000, 83871, 477, 0.916, 31.9, 1320, 5527, 47.2, 60000, 3798, 12, 35000, 1.5, 8500, 64, 107],
+["Azerbaïdjan", "🇦🇿", 10300000, 86600, 73, 0.745, 1.6, 1450, 2944, 13.0, 35000, 4466, 3, 1400, 1.7, 21000, 61, 118],
+["Bahamas", "🇧🇸", 400000, 13880, 12, 0.812, 7.0, 1100, 0, 51.4, 2000, 63, 1, 30000, 1.7, 1500, 75, 29],
+["Bahreïn", "🇧🇭", 1500000, 778, 44, 0.875, 11.1, 1250, 0, 0.8, 30000, 134, 3, 35000, 1.9, 4000, 53, 1900],
+["Bangladesh", "🇧🇩", 170000000, 147570, 460, 0.661, 0.3, 1100, 3000, 11.0, 100000, 1052, 3, 600, 1.9, 83000, 75, 1152],
+["Barbade", "🇧🇧", 290000, 430, 5, 0.79, 1.0, 1100, 0, 14.7, 1000, 340, 1, 45000, 1.6, 700, 74, 660],
+["Belgique", "🇧🇪", 11600000, 30528, 600, 0.937, 9.1, 5, 3600, 22.8, 90000, 694, 15, 45000, 1.6, 11000, 40, 380],
+["Belize", "🇧🇿", 400000, 22966, 2, 0.711, 1.7, 1100, 0, 59.7, 600, 1124, 1, 3000, 2.3, 1300, 55, 17],
+["Bénin", "🇧🇯", 13000000, 112622, 17, 0.525, 0.3, 1290, 438, 37.8, 7000, 658, 2, 800, 4.8, 6000, 65, 115],
+["Bhoutan", "🇧🇹", 780000, 38394, 2, 0.666, 0.3, 1100, 0, 71.4, 1500, 7570, 0, 3000, 1.7, 1000, 42, 20],
+["Biélorussie", "🇧🇾", 9200000, 207600, 73, 0.823, 3.6, 1400, 5528, 42.6, 50000, 345, 4, 8000, 1.4, 32000, 68, 44],
+["Bolivie", "🇧🇴", 12000000, 1098581, 43, 0.692, 1.0, 1170, 3652, 50.3, 22000, 6542, 7, 3000, 2.7, 19000, 60, 11],
+["Bosnie-Herzégovine", "🇧🇦", 3200000, 51197, 24, 0.78, 1.2, 1250, 965, 42.7, 20000, 2386, 3, 3000, 1.2, 2500, 62, 62],
+["Botswana", "🇧🇼", 2600000, 581730, 19, 0.693, 1.7, 1450, 888, 18.9, 7000, 1494, 1, 2000, 2.8, 4000, 61, 4],
+["Brésil", "🇧🇷", 215000000, 8515767, 1920, 0.754, 6.4, 3, 29850, 58.9, 450000, 2995, 23, 8500, 1.7, 815000, 78, 25],
+["Brunei", "🇧🇳", 450000, 5765, 16, 0.829, 0.3, 1100, 0, 72.1, 7500, 1850, 0, 10, 1.7, 800, 76, 78],
+["Bulgarie", "🇧🇬", 6500000, 110879, 89, 0.795, 9.3, 1170, 4072, 35.2, 40000, 2925, 10, 8000, 1.5, 6000, 53, 59],
+["Burkina Faso", "🇧4", 22000000, 274200, 19, 0.449, 0.1, 1400, 622, 19.3, 5000, 749, 3, 400, 4.4, 7500, 35, 80],
+["Burundi", "🇧🇮", 13000000, 27834, 3, 0.433, 0.1, 1100, 0, 10.9, 500, 2684, 0, 100, 5.2, 11000, 60, 467],
+["Cambodge", "🇰🇭", 16800000, 181035, 28, 0.593, 6.6, 1200, 612, 45.7, 10000, 1813, 4, 1500, 2.4, 38000, 70, 93],
+["Cameroun", "🇨🇲", 28000000, 475442, 44, 0.576, 1.0, 1430, 987, 39.3, 9000, 4040, 2, 1500, 4.5, 30000, 90, 59],
+["Canada", "🇨🇦", 39000000, 9984670, 2140, 0.936, 22.1, 50, 49422, 34.1, 550000, 5959, 22, 50000, 1.4, 32000, 51, 4],
+["Cap-Vert", "🇨🇻", 590000, 4033, 2, 0.662, 0.8, 1170, 0, 21.0, 600, 2829, 1, 2500, 2.2, 1600, 61, 146],
+["Chili", "🇨🇱", 19500000, 756102, 317, 0.855, 5.4, 42, 7281, 21.9, 85000, 6893, 7, 7000, 1.6, 43000, 37, 26],
+["Chine", "🇨🇳", 1425000000, 9596961, 18000, 0.768, 65.7, 80, 150000, 22.3, 11000000, 8848, 56, 10000, 1.2, 1700000, 70, 148],
+["Chypre", "🇨🇾", 1250000, 9251, 28, 0.896, 4.0, 1450, 0, 18.7, 7000, 1952, 3, 40000, 1.3, 800, 49, 135],
+["Colombie", "🇨🇴", 52000000, 1141748, 343, 0.752, 4.5, 17, 2141, 52.7, 86000, 5700, 9, 8000, 1.7, 98000, 64, 45],
+["Comores", "🇰🇲", 900000, 2235, 1, 0.558, 0.1, 1450, 0, 19.4, 500, 2360, 0, 800, 3.8, 300, 65, 402],
+["Congo", "🇨🇬", 6000000, 342000, 14, 0.571, 0.1, 1400, 510, 65.4, 7000, 1020, 1, 2000, 4.3, 1500, 79, 17],
+["Costa Rica", "🇨🇷", 5200000, 51100, 68, 0.809, 3.1, 31, 278, 54.0, 8000, 3820, 4, 8500, 1.6, 16000, 65, 102],
+["Côte d'Ivoire", "🇨🇮", 28000000, 322463, 70, 0.538, 2.0, 52, 660, 32.7, 10000, 1752, 4, 1500, 4.5, 23000, 81, 87],
+["Croatie", "🇭🇷", 4000000, 56594, 71, 0.858, 17.3, 10, 2604, 34.4, 17000, 1831, 10, 20000, 1.5, 3500, 53, 70],
+["Cuba", "🇨🇺", 11200000, 109884, 107, 0.764, 4.0, 169, 4226, 31.2, 25000, 1974, 9, 8500, 1.5, 57000, 62, 102],
+["Danemark", "🇩🇰", 5900000, 43094, 395, 0.948, 33.0, 19, 2633, 14.7, 32000, 170, 10, 45000, 1.7, 4000, 56, 137],
+["Djibouti", "🇩🇯", 1100000, 23200, 3, 0.509, 0.1, 1100, 781, 0.2, 500, 2028, 0, 3000, 2.8, 700, 75, 47],
+["Dominique", "🇩🇲", 72000, 751, 1, 0.72, 0.2, 1100, 0, 57.8, 200, 1447, 1, 6000, 1.9, 200, 50, 96],
+["Egypte", "🇪🇬", 110000000, 1001450, 476, 0.731, 13.0, 34, 5085, 0.1, 250000, 2629, 7, 7500, 2.9, 120000, 70, 109],
+["Émirats arabes unis", "🇦🇪", 9500000, 83600, 507, 0.911, 22.0, 72, 1200, 4.6, 200000, 1527, 3, 35000, 1.4, 10000, 62, 114],
+["Équateur", "🇪🇨", 18000000, 283561, 115, 0.74, 1.5, 41, 965, 50.3, 40000, 6263, 4, 6000, 2.3, 39000, 35, 63],
+["Érythrée", "🇪🇷", 3600000, 117600, 2, 0.492, 0.0, 1100, 306, 15.0, 700, 3018, 0, 10, 3.9, 10, 77, 31],
+["Espagne", "🇪🇸", 47500000, 505990, 1400, 0.905, 83.7, 8, 16000, 37.1, 230000, 3718, 50, 32000, 1.2, 55000, 51, 94],
+["Estonie", "🇪🇪", 1300000, 45228, 38, 0.89, 3.1, 118, 2146, 51.3, 10000, 318, 2, 25000, 1.6, 2000, 56, 29],
+["Eswatini", "🇸🇿", 1200000, 17364, 5, 0.597, 0.9, 1100, 301, 33.8, 1000, 1862, 0, 2000, 2.8, 3700, 55, 69],
+["États-Unis", "🇺🇸", 335000000, 9833517, 25000, 0.921, 79.3, 11, 293564, 33.9, 4700000, 6190, 24, 60000, 1.7, 1800000, 81, 36],
+["Éthiopie", "🇪🇹", 123000000, 1104300, 126, 0.498, 0.9, 140, 659, 15.1, 20000, 4550, 9, 1000, 4.0, 110000, 47, 112],
+["Fidji", "🇫🇯", 900000, 18274, 5, 0.73, 0.8, 1100, 0, 55.7, 1500, 1324, 0, 6000, 2.7, 1800, 65, 49],
+["Finlande", "🇫🇮", 5500000, 338424, 280, 0.94, 5.0, 60, 5919, 73.7, 40000, 1324, 7, 30000, 1.4, 2800, 54, 16],
+["France", "🇫🇷", 68000000, 551695, 2780, 0.903, 100.0, 2, 27483, 31.5, 300000, 4807, 52, 45000, 1.8, 72000, 46, 123],
+["Gabon", "🇬🇦", 2400000, 267667, 21, 0.706, 0.3, 108, 649, 91.3, 6000, 1020, 1, 5000, 3.6, 3500, 64, 9],
+["Gambie", "🇬🇲", 2700000, 11295, 2, 0.5, 0.3, 120, 0, 48.4, 600, 53, 1, 400, 4.3, 1100, 58, 239],
+["Géorgie", "🇬🇪", 3700000, 69700, 25, 0.802, 5.4, 77, 1363, 40.6, 9000, 5201, 4, 6000, 2.0, 9500, 41, 53],
+["Ghana", "🇬🇭", 33000000, 238533, 76, 0.632, 0.9, 61, 1300, 41.0, 20000, 885, 2, 3000, 3.5, 13000, 79, 138],
+["Grèce", "🇬🇷", 10400000, 131957, 216, 0.887, 31.3, 50, 2240, 32.0, 55000, 2917, 18, 35000, 1.3, 11000, 55, 79],
+["Grenade", "🇬🇩", 125000, 344, 1, 0.795, 0.5, 1100, 0, 50.0, 300, 840, 0, 8000, 2.0, 400, 45, 363],
+["Guatemala", "🇬🇹", 18600000, 108889, 95, 0.627, 2.1, 108, 0, 34.0, 20000, 4220, 3, 3000, 2.8, 25000, 67, 171],
+["Guinée", "🇬🇳", 14000000, 245857, 21, 0.465, 0.1, 108, 1086, 26.2, 5000, 1752, 1, 1200, 4.7, 4500, 62, 57],
+["Guinée-Bissau", "🇬🇼", 2000000, 36125, 1, 0.483, 0.1, 115, 0, 69.8, 300, 300, 1, 1000, 4.4, 500, 51, 55],
+["Guinée équatoriale", "🇬🇶", 1600000, 28051, 12, 0.596, 0.1, 98, 0, 55.5, 5000, 3008, 0, 5000, 4.3, 2000, 81, 57],
+["Guyana", "🇬🇾", 800000, 214969, 15, 0.714, 0.3, 1100, 0, 93.6, 3000, 2085, 1, 5000, 2.3, 2000, 78, 4],
+["Haïti", "🇭🇹", 11500000, 27750, 21, 0.535, 0.9, 87, 0, 3.5, 4000, 2680, 1, 400, 2.8, 11000, 58, 414],
+["Honduras", "🇭🇳", 10400000, 112492, 32, 0.621, 1.9, 80, 0, 46.5, 10000, 2870, 2, 2800, 2.3, 21000, 51, 92],
+["Hongrie", "🇭🇺", 9700000, 93028, 185, 0.846, 17.5, 27, 7687, 22.5, 45000, 1014, 8, 15000, 1.5, 16000, 60, 104],
+["Îles Salomon", "🇸🇧", 720000, 28896, 1, 0.564, 0.1, 136, 0, 77.9, 400, 2335, 0, 1200, 3.8, 600, 58, 25],
+["Inde", "🇮🇳", 1428000000, 3287263, 3380, 0.633, 17.9, 101, 68000, 24.3, 2600000, 8586, 40, 2300, 2.0, 550000, 73, 470],
+["Indonésie", "🇮🇩", 275000000, 1904569, 1300, 0.705, 14.8, 149, 6200, 49.9, 600000, 4884, 10, 4200, 2.2, 275000, 62, 145],
+["Irak", "🇮🇶", 44000000, 438317, 264, 0.686, 0.7, 68, 2272, 1.9, 150000, 3611, 6, 2500, 3.3, 60000, 53, 100],
+["Iran", "🇮🇷", 88000000, 1648195, 366, 0.78, 5.0, 21, 9265, 6.5, 750000, 5610, 26, 1600, 1.7, 190000, 84, 53],
+["Irlande", "🇮🇪", 5100000, 70273, 530, 0.945, 10.9, 60, 2434, 11.1, 35000, 1038, 2, 48000, 1.6, 4000, 44, 72],
+["Islande", "🇮🇸", 380000, 103000, 28, 0.959, 2.2, 64, 0, 0.5, 3000, 2110, 3, 42000, 1.7, 130, 47, 4],
+["Israël", "🇮🇱", 9600000, 22072, 520, 0.919, 4.6, 75, 1436, 7.6, 60000, 1208, 9, 36000, 2.9, 21000, 74, 433],
+["Italie", "🇮🇹", 59000000, 301340, 2010, 0.895, 64.5, 9, 16788, 32.7, 300000, 4810, 58, 48000, 1.2, 56000, 76, 195],
+["Jamaïque", "🇯🇲", 2800000, 10991, 17, 0.709, 2.7, 63, 0, 31.0, 8000, 2256, 1, 6000, 1.9, 3500, 51, 255],
+["Japon", "🇯🇵", 125000000, 377975, 4230, 0.925, 25.0, 18, 27311, 68.4, 1100000, 3776, 25, 90000, 1.3, 47000, 66, 332],
+["Jordanie", "🇯🇴", 11300000, 89342, 47, 0.72, 5.3, 84, 509, 1.1, 25000, 1854, 6, 4000, 2.6, 20000, 61, 127],
+["Kazakhstan", "🇰🇿", 19600000, 2724900, 220, 0.811, 8.8, 100, 16004, 1.2, 250000, 7010, 6, 8000, 3.1, 35000, 70, 7],
+["Kenya", "🇰🇪", 54000000, 580367, 113, 0.575, 2.0, 109, 1729, 6.3, 18000, 5199, 7, 2000, 3.3, 55000, 57, 94],
+["Kirghizistan", "🇰🇬", 6800000, 199951, 10, 0.692, 2.0, 97, 424, 5.3, 10000, 7439, 3, 3000, 3.0, 9000, 55, 34],
+["Kiribati", "🇰🇮", 130000, 811, 1, 0.624, 0.1, 1100, 0, 15.0, 100, 81, 0, 900, 3.3, 130, 63, 160],
+["Koweït", "🇰🇼", 4300000, 17818, 184, 0.831, 0.2, 143, 0, 0.4, 95000, 306, 0, 12000, 1.6, 4500, 83, 240],
+["Laos", "🇱🇦", 7500000, 236800, 15, 0.607, 1.3, 1100, 424, 82.1, 25000, 2819, 3, 10000, 2.5, 11000, 87, 32],
+["Lesotho", "🇱🇸", 2300000, 30355, 2, 0.514, 0.4, 153, 0, 1.6, 500, 3482, 1, 700, 3.0, 2000, 65, 75],
+["Lettonie", "🇱🇻", 1900000, 64589, 41, 0.863, 1.9, 137, 2208, 54.9, 7000, 312, 2, 14000, 1.6, 3000, 49, 29],
+["Liban", "🇱🇧", 5500000, 10452, 23, 0.706, 2.5, 107, 401, 13.4, 25000, 3088, 5, 20000, 2.1, 8000, 68, 523],
+["Liberia", "🇱🇷", 5300000, 111369, 4, 0.481, 0.1, 153, 429, 44.3, 2000, 1440, 0, 600, 4.1, 3000, 57, 48],
+["Libye", "🇱🇾", 6700000, 1759540, 48, 0.718, 0.1, 120, 0, 0.1, 50000, 2267, 5, 0, 2.2, 6000, 71, 4],
+["Liechtenstein", "🇱🇮", 39000, 160, 6, 0.935, 0.1, 198, 9, 43.1, 50, 2599, 0, 0, 1.5, 10, 54, 244],
+["Lituanie", "🇱🇹", 2800000, 65300, 66, 0.875, 2.9, 144, 1910, 34.8, 12000, 294, 4, 25000, 1.6, 5000, 58, 43],
+["Luxembourg", "🇱🇺", 640000, 2586, 82, 0.93, 1.0, 93, 271, 35.7, 9000, 560, 1, 115000, 1.4, 600, 49, 248],
+["Macédoine du Nord", "🇲🇰", 1800000, 25713, 13, 0.77, 1.2, 65, 699, 39.6, 7000, 2764, 1, 5000, 1.5, 2000, 58, 72],
+["Madagascar", "🇲🇬", 29000000, 587041, 14, 0.501, 0.3, 105, 836, 21.4, 3000, 2876, 3, 500, 4.0, 28000, 49, 49],
+["Malaisie", "🇲🇾", 34000000, 329847, 434, 0.803, 13.5, 138, 1851, 67.6, 250000, 4095, 4, 8000, 1.8, 72000, 63, 103],
+["Malawi", "🇲🇼", 20000000, 118484, 13, 0.512, 0.9, 123, 767, 33.2, 1500, 3002, 2, 600, 4.1, 14000, 68, 213],
+["Maldives", "🇲🇻", 560000, 300, 5, 0.747, 1.3, 154, 0, 3.0, 1500, 2, 0, 13000, 1.7, 1700, 44, 1802],
+["Mali", "🇲🇱", 22000000, 1240192, 19, 0.428, 0.2, 50, 593, 10.2, 5000, 1155, 4, 500, 5.9, 8000, 40, 18],
+["Malte", "🇲🇹", 530000, 316, 17, 0.918, 2.6, 172, 0, 1.1, 2000, 253, 3, 30000, 1.1, 800, 45, 1642],
+["Maroc", "🇲🇦", 37000000, 446550, 142, 0.683, 10.9, 11, 2295, 12.6, 70000, 4167, 9, 3800, 2.3, 89000, 59, 83],
+["Maurice", "🇲🇺", 1300000, 2040, 11, 0.802, 1.3, 180, 0, 17.3, 4000, 828, 2, 10000, 1.4, 2500, 61, 627],
+["Mauritanie", "🇲🇷", 4700000, 1030700, 9, 0.556, 0.0, 105, 728, 0.2, 4000, 915, 2, 1000, 4.5, 2000, 66, 5],
+["Mexique", "🇲🇽", 127000000, 1964375, 1410, 0.758, 31.9, 15, 26914, 34.2, 400000, 5636, 35, 10000, 1.9, 220000, 69, 65],
+["Micronésie", "🇫🇲", 115000, 702, 0, 0.628, 0.0, 198, 0, 91.9, 150, 791, 1, 1500, 3.0, 200, 58, 164],
+["Moldavie", "🇲🇩", 2600000, 33851, 13, 0.767, 0.1, 171, 1157, 12.6, 5000, 430, 1, 3000, 1.8, 6000, 51, 123],
+["Monaco", "🇲🇨", 36000, 2, 8, 0.956, 0.3, 198, 1, 0.0, 100, 161, 0, 0, 2.1, 20, 65, 18000],
+["Mongolie", "🇲🇳", 3400000, 1564116, 17, 0.739, 0.1, 183, 1810, 7.9, 25000, 4374, 5, 10000, 2.9, 4000, 55, 2],
+["Monténégro", "🇲🇪", 620000, 13812, 6, 0.832, 2.5, 69, 250, 61.5, 2000, 2534, 4, 9000, 1.7, 1000, 37, 45],
+["Mozambique", "🇲🇿", 33000000, 801590, 18, 0.446, 1.6, 114, 4787, 48.0, 8000, 2436, 1, 600, 4.7, 18000, 64, 41],
+["Namibie", "🇳🇦", 2600000, 824292, 12, 0.615, 1.5, 113, 2628, 8.8, 4000, 2606, 2, 5000, 3.3, 4000, 81, 3],
+["Nauru", "🇳🇷", 12000, 21, 0, 0.696, 0.0, 198, 3, 0.0, 50, 71, 0, 12000, 3.5, 20, 54, 571],
+["Népal", "🇳🇵", 30500000, 147181, 41, 0.602, 1.2, 175, 59, 25.4, 15000, 8848, 4, 1500, 2.0, 25000, 68, 207],
+["Nicaragua", "🇳🇮", 6800000, 130370, 15, 0.667, 1.0, 142, 0, 25.9, 5000, 2107, 2, 2500, 2.4, 10000, 77, 52],
+["Niger", "🇳🇪", 26000000, 1267000, 14, 0.4, 0.1, 122, 0, 0.9, 2000, 2022, 3, 500, 6.8, 10000, 59, 21],
+["Nigéria", "🇳🇬", 218000000, 923768, 477, 0.535, 5.0, 40, 3798, 7.7, 130000, 2419, 2, 2000, 5.2, 74000, 71, 236],
+["Norvège", "🇳🇴", 5400000, 385207, 579, 0.961, 5.9, 44, 4208, 33.2, 40000, 2469, 8, 25000, 1.5, 3000, 63, 14],
+["Nouvelle-Zélande", "🇳🇿", 5100000, 268021, 249, 0.937, 3.8, 105, 4128, 31.4, 33000, 3724, 3, 22000, 1.6, 8000, 45, 19],
+["Oman", "🇴🇲", 4500000, 309500, 114, 0.816, 3.5, 75, 0, 0.1, 70000, 2980, 5, 16000, 2.7, 2000, 3, 15],
+["Ouganda", "🇺🇬", 47000000, 241550, 45, 0.525, 1.5, 89, 1244, 9.7, 6000, 5109, 3, 1000, 4.6, 65000, 78, 195],
+["Ouzbékistan", "🇺🇿", 36000000, 447400, 80, 0.72, 5.0, 77, 4669, 7.5, 110000, 4643, 5, 2000, 2.3, 29000, 66, 80],
+["Pakistan", "🇵🇰", 235000000, 881912, 376, 0.544, 0.5, 195, 11881, 1.9, 250000, 8611, 6, 1500, 3.4, 80000, 71, 267],
+["Palestine", "🇵🇸", 5300000, 6020, 18, 0.715, 0.5, 93, 0, 1.5, 3000, 1016, 3, 3000, 3.5, 4500, 87, 880],
+["Panama", "🇵🇦", 4400000, 75417, 76, 0.805, 1.8, 61, 77, 43.6, 12000, 3474, 5, 18000, 2.4, 20000, 60, 58],
+["Papouasie-Nouvelle-Guinée", "🇵🇬", 10000000, 462840, 30, 0.558, 0.2, 159, 0, 63.4, 7000, 4509, 1, 3000, 3.4, 5000, 52, 22],
+["Paraguay", "🇵🇾", 6700000, 406752, 41, 0.717, 1.2, 46, 30, 39.3, 8000, 842, 2, 6000, 2.4, 15000, 44, 16],
+["Pays-Bas", "🇳🇱", 17700000, 41543, 991, 0.941, 20.1, 6, 3434, 11.2, 140000, 322, 12, 50000, 1.5, 11000, 56, 426],
+["Pérou", "🇵🇪", 34000000, 1285216, 242, 0.762, 4.4, 21, 1907, 57.7, 60000, 6768, 13, 7000, 2.2, 90000, 60, 26],
+["Philippines", "🇵🇭", 115000000, 300000, 404, 0.699, 8.2, 134, 77, 24.1, 140000, 2954, 6, 3500, 2.5, 165000, 65, 383],
+["Pologne", "🇵🇱", 38000000, 312696, 688, 0.876, 22.1, 26, 19503, 31.0, 300000, 2499, 17, 18000, 1.4, 70000, 51, 121],
+["Portugal", "🇵🇹", 10300000, 92090, 251, 0.866, 24.6, 9, 2526, 36.2, 40000, 2351, 17, 25000, 1.4, 12000, 74, 112],
+["Qatar", "🇶🇦", 2700000, 11586, 237, 0.855, 2.1, 61, 0, 0.0, 100000, 103, 1, 70000, 1.8, 2000, 43, 233],
+["République centrafricaine", "🇨🇫", 5000000, 622984, 2, 0.404, 0.0, 131, 0, 35.6, 500, 1410, 2, 100, 6.0, 1500, 66, 8],
+["République démocratique du Congo", "🇨🇩", 99000000, 2344858, 63, 0.479, 0.4, 69, 3641, 67.3, 10000, 5109, 5, 500, 5.7, 25000, 59, 42],
+["République dominicaine", "🇩🇴", 11200000, 48671, 113, 0.767, 7.5, 151, 496, 43.6, 25000, 3098, 1, 10000, 2.3, 26000, 56, 230],
+["Roumanie", "🇷🇴", 19000000, 238391, 301, 0.821, 13.5, 48, 10774, 30.1, 70000, 2544, 9, 15000, 1.6, 23000, 64, 80],
+["Royaume-Uni", "🇬🇧", 67000000, 242495, 3180, 0.929, 39.4, 4, 16321, 13.1, 330000, 1345, 33, 42000, 1.6, 80000, 42, 276],
+["Russie", "🇷🇺", 144000000, 17098242, 2240, 0.822, 24.5, 37, 85494, 49.8, 1700000, 5642, 30, 2000, 1.5, 433000, 71, 8],
+["Rwanda", "🇷🇼", 13700000, 26338, 13, 0.534, 1.6, 139, 0, 19.2, 1000, 4507, 0, 900, 3.9, 65000, 66, 520],
+["Saint-Christophe-et-Niévès", "🇰🇳", 47000, 261, 1, 0.777, 0.1, 145, 50, 42.3, 200, 1156, 1, 10000, 1.3, 200, 60, 180],
+["Sainte-Lucie", "🇱🇨", 180000, 616, 2, 0.715, 0.4, 167, 0, 33.2, 400, 950, 1, 9000, 1.4, 500, 56, 292],
+["Saint-Marin", "🇸🇲", 34000, 61, 2, 0.853, 0.1, 211, 0, 0.0, 100, 739, 1, 0, 1.3, 2, 33, 557],
+["Saint-Vincent-et-les-Grenadines", "🇻🇨", 100000, 389, 1, 0.751, 0.1, 175, 0, 69.2, 200, 1234, 0, 7000, 1.8, 400, 73, 257],
+["Salvador", "🇸🇻", 6300000, 21041, 32, 0.675, 1.7, 75, 13, 12.6, 7000, 2730, 1, 5000, 2.0, 70000, 42, 300],
+["Samoa", "🇼🇸", 220000, 2842, 1, 0.707, 0.2, 198, 0, 60.4, 200, 1857, 0, 4000, 3.8, 500, 66, 77],
+["Sao Tomé-et-Principe", "🇸🇹", 220000, 964, 1, 0.618, 0.0, 186, 0, 55.8, 100, 2024, 0, 2000, 4.3, 200, 61, 228],
+["Sénégal", "🇸🇳", 17000000, 196722, 27, 0.511, 1.4, 18, 906, 42.8, 10000, 648, 7, 1000, 4.5, 11000, 62, 86],
+["Serbie", "🇷🇸", 6800000, 88361, 63, 0.802, 3.6, 29, 3809, 31.1, 45000, 2169, 5, 9000, 1.5, 11000, 53, 77],
+["Seychelles", "🇸🇨", 100000, 452, 1, 0.785, 0.4, 198, 0, 88.5, 500, 905, 2, 15000, 2.2, 600, 46, 221],
+["Sierra Leone", "🇸🇱", 8600000, 71740, 4, 0.477, 0.1, 125, 0, 43.1, 1000, 1948, 0, 600, 4.1, 4000, 59, 120],
+["Singapour", "🇸🇬", 5600000, 728, 466, 0.939, 15.1, 158, 200, 23.1, 45000, 163, 1, 80000, 1.1, 10000, 71, 7692],
+["Slovaquie", "🇸🇰", 5400000, 49035, 115, 0.848, 7.6, 51, 3626, 40.1, 30000, 2655, 7, 21000, 1.5, 10000, 50, 110],
+["Slovénie", "🇸🇮", 2100000, 20273, 62, 0.918, 5.9, 62, 1209, 62.0, 12000, 2864, 4, 29000, 1.6, 1300, 54, 103],
+["Somalie", "🇸🇴", 17000000, 637657, 7, 0.364, 0.0, 196, 0, 10.0, 500, 2450, 0, 100, 6.0, 3000, 56, 26],
+["Soudan", "🇸🇩", 46000000, 1861484, 30, 0.508, 0.8, 128, 7251, 10.3, 20000, 3042, 3, 700, 4.4, 20000, 72, 24],
+["Soudan du Sud", "🇸🇸", 11000000, 619745, 12, 0.385, 0.0, 165, 248, 0.0, 1500, 3187, 0, 200, 4.5, 7000, 72, 18],
+["Sri Lanka", "🇱🇰", 22000000, 65610, 77, 0.782, 1.9, 207, 1562, 32.9, 20000, 2524, 8, 3500, 2.2, 28000, 74, 335],
+["Suède", "🇸🇪", 10500000, 450295, 627, 0.947, 7.6, 22, 15600, 68.9, 35000, 2104, 15, 52000, 1.7, 6000, 65, 23],
+["Suisse", "🇨🇭", 8700000, 41284, 807, 0.962, 11.8, 12, 5323, 31.8, 35000, 4634, 13, 105000, 1.5, 6900, 58, 210],
+["Suriname", "🇸🇷", 610000, 163820, 3, 0.73, 0.3, 139, 0, 97.4, 2000, 1230, 2, 4000, 2.4, 1000, 64, 4],
+["Syrie", "🇸🇾", 22000000, 185180, 21, 0.577, 2.4, 90, 2052, 2.7, 30000, 2814, 6, 1000, 2.7, 10000, 58, 118],
+["Tadjikistan", "🇹🇯", 10000000, 143100, 8, 0.685, 1.3, 109, 950, 2.9, 6000, 7495, 2, 3000, 3.5, 10000, 71, 70],
+["Tanzanie", "🇹🇿", 65000000, 945087, 76, 0.549, 1.5, 130, 4097, 51.6, 12000, 5895, 7, 1000, 4.7, 32000, 62, 69],
+["Tchad", "🇹🇩", 17000000, 1284000, 11, 0.394, 0.1, 181, 0, 3.9, 2000, 3445, 2, 600, 5.6, 9000, 39, 13],
+["Tchéquie", "🇨🇿", 10700000, 78867, 290, 0.889, 22.0, 38, 9548, 34.6, 90000, 1603, 16, 25000, 1.7, 19000, 61, 136],
+["Thaïlande", "🇹🇭", 71000000, 513120, 505, 0.8, 39.8, 113, 4127, 38.9, 250000, 2565, 6, 7000, 1.3, 285000, 69, 138],
+["Timor oriental", "🇹🇱", 1300000, 14874, 2, 0.607, 0.1, 198, 0, 45.4, 500, 2963, 0, 1000, 3.9, 600, 73, 87],
+["Togo", "🇹🇬", 8800000, 56785, 8, 0.539, 0.5, 129, 568, 3.1, 2000, 986, 1, 900, 4.3, 4500, 57, 155],
+["Tonga", "🇹🇴", 106000, 747, 0, 0.745, 0.1, 198, 0, 12.5, 150, 1033, 0, 4000, 3.5, 200, 64, 142],
+["Trinité-et-Tobago", "🇹🇹", 1400000, 5130, 24, 0.81, 0.4, 104, 0, 46.0, 30000, 940, 0, 17000, 1.6, 4000, 63, 273],
+["Tunisie", "🇹🇳", 12300000, 163610, 46, 0.731, 9.4, 30, 2173, 6.8, 30000, 1544, 8, 3500, 2.1, 23000, 65, 75],
+["Turkménistan", "🇹🇲", 6400000, 488100, 45, 0.745, 0.0, 135, 5113, 8.8, 70000, 3139, 3, 4000, 2.7, 30000, 16, 13],
+["Turquie", "🇹🇷", 85000000, 783562, 905, 0.838, 51.2, 43, 12740, 28.9, 400000, 5137, 19, 9000, 1.9, 314000, 69, 108],
+["Tuvalu", "🇹🇻", 11000, 26, 0, 0.641, 0.0, 198, 0, 33.3, 10, 5, 0, 4000, 3.1, 10, 65, 384],
+["Ukraine", "🇺🇦", 41000000, 603500, 160, 0.773, 14.2, 24, 21733, 16.7, 185000, 2061, 7, 4000, 1.2, 50000, 45, 68],
+["Uruguay", "🇺🇾", 3500000, 176215, 71, 0.809, 3.0, 16, 1641, 11.2, 7000, 514, 3, 20000, 1.5, 13000, 50, 20],
+["Vanuatu", "🇻🇺", 320000, 12189, 1, 0.607, 0.1, 170, 0, 36.1, 200, 1877, 1, 3000, 3.7, 300, 57, 26],
+["Venezuela", "🇻🇪", 2800000, 916445, 100, 0.691, 0.4, 54, 444, 52.4, 100000, 4978, 3, 3000, 2.2, 40000, 61, 30],
+["Vietnam", "🇻🇳", 99000000, 331212, 409, 0.703, 18.0, 95, 2600, 46.7, 250000, 3143, 8, 4000, 1.9, 125000, 79, 299],
+["Yémen", "🇾🇪", 33000000, 527968, 21, 0.424, 0.1, 156, 0, 1.0, 10000, 3666, 4, 800, 3.6, 15000, 68, 62],
+["Zambie", "🇿🇲", 20000000, 752618, 29, 0.565, 1.2, 84, 1297, 65.0, 7000, 2329, 1, 1200, 4.3, 24000, 62, 26],
+["Zimbabwe", "🇿🇼", 16000000, 390757, 27, 0.593, 2.3, 124, 3427, 35.0, 10000, 2592, 5, 1300, 3.4, 22000, 81, 41]
+];
+
+const CAT_CONFIG = {
+    "Population": { idx: 2, desc: "Population totale. Plus c'est grand, mieux c'est.", asc: false },
+    "Superficie": { idx: 3, desc: "Surface en km². Plus c'est grand, mieux c'est.", asc: false },
+    "PIB": { idx: 4, desc: "Richesse totale. Plus c'est grand, mieux c'est.", asc: false },
+    "IDH": { idx: 5, desc: "Développement humain. Le plus élevé gagne.", asc: false },
+    "Tourisme": { idx: 6, desc: "Visiteurs annuels. Plus c'est grand, mieux c'est.", asc: false },
+    "Foot": { idx: 7, desc: "Rang FIFA. Le plus petit chiffre (1er) gagne.", asc: true },
+    "Rail": { idx: 8, desc: "Réseau ferré (km). Plus c'est long, mieux c'est.", asc: false },
+    "Foret": { idx: 9, desc: "% de forêt. Plus c'est vert, mieux c'est.", asc: false },
+    "CO2": { idx: 10, desc: "Pollution (Tonnes). Le plus gros pollueur gagne.", asc: false },
+    "Sommet": { idx: 11, desc: "Point culminant. Plus c'est haut, mieux c'est.", asc: false },
+    "UNESCO": { idx: 12, desc: "Sites classés. Plus y'en a, mieux c'est.", asc: false },
+    "Dette": { idx: 13, desc: "Dette/hab. Moins de dette gagne.", asc: true },
+    "Fecondite": { idx: 14, desc: "Enfants/femme. Plus c'est grand, mieux c'est.", asc: false },
+    "Prison": { idx: 15, desc: "Prisonniers. Plus c'est grand, mieux c'est.", asc: false },
+    "Age_Chef": { idx: 16, desc: "Âge du dirigeant. Le plus jeune gagne.", asc: true },
+    "Densite": { idx: 17, desc: "Habitants/km². Plus c'est dense, mieux c'est.", asc: false }
+};
+
+// --- LOGIQUE DU JEU ---
+let gameState = {
+    selectedCats: [],
+    round: 1,
+    score: 0,
+    countries: [], // Les 6 pays de la partie
+    allCountries: [], // Base de données complète avec rangs calculés
+    currentCountry: null
+};
+
+function init() {
+    processData();
+    setupSelectionScreen();
+}
+
+function processData() {
+    // 1. Filtrer les lignes invalides et Créer les objets pays
+    let cats = Object.keys(CAT_CONFIG);
+    
+    // SECURITY : .filter() removes undefined/null rows to prevent the crash
+    let objs = rawData
+        .filter(row => Array.isArray(row) && row.length >= 18) 
+        .map(row => {
+            let p = { name: row[0], emoji: row[1], values: {}, ranks: {} };
+            cats.forEach(k => { p.values[k] = row[CAT_CONFIG[k].idx]; });
+            return p;
+        });
+
+    // 2. Calculer les rangs pour TOUT le monde (185 pays)
+    cats.forEach(cat => {
+        let asc = CAT_CONFIG[cat].asc;
+        objs.sort((a, b) => asc ? a.values[cat] - b.values[cat] : b.values[cat] - a.values[cat]);
+        objs.forEach((p, i) => { p.ranks[cat] = i + 1; });
+    });
+
+    gameState.allCountries = objs;
+}
+
+function setupSelectionScreen() {
+    let container = document.getElementById("setup-buttons");
+    Object.keys(CAT_CONFIG).sort().forEach(cat => {
+        let btn = document.createElement("button");
+        btn.textContent = cat;
+        btn.onclick = () => toggleCategory(cat, btn);
+        container.appendChild(btn);
+    });
+}
+
+function toggleCategory(cat, btn) {
+    let idx = gameState.selectedCats.indexOf(cat);
+    
+    if (idx > -1) {
+        gameState.selectedCats.splice(idx, 1);
+        btn.classList.remove("selected");
+    } else {
+        if (gameState.selectedCats.length >= 6) return;
+        gameState.selectedCats.push(cat);
+        btn.classList.add("selected");
+    }
+
+    // Mise à jour Info
+    let info = document.getElementById("category-info-box");
+    info.innerHTML = `<strong>${cat}</strong> : ${CAT_CONFIG[cat].desc}`;
+    
+    // Mise à jour UI
+    document.getElementById("selection-count").textContent = `${gameState.selectedCats.length} / 6 sélectionnées`;
+    
+    let startBtn = document.getElementById("start-btn");
+    startBtn.style.display = (gameState.selectedCats.length === 6) ? "block" : "none";
+}
+
+function startGame() {
+    // Tirer 6 pays au hasard parmi les 185
+    let shuffled = [...gameState.allCountries].sort(() => 0.5 - Math.random());
+    gameState.countries = shuffled.slice(0, 6);
+    
+    // Changer d'écran
+    document.getElementById("screen-setup").classList.remove("active");
+    document.getElementById("screen-game").classList.add("active");
+    
+    updateGameUI();
+}
+
+function updateGameUI() {
+    if (gameState.round > 6) {
+        endGame();
+        return;
+    }
+
+    // Reset UI
+    document.getElementById("ui-feedback").textContent = "";
+    document.getElementById("game-buttons").innerHTML = "";
+    
+    // Suspense
+    let nameEl = document.getElementById("country-name");
+    nameEl.textContent = "???";
+    nameEl.classList.add("suspense");
+    document.getElementById("country-flag").textContent = "🌍";
+
+    setTimeout(() => {
+        let country = gameState.countries[gameState.round - 1];
+        gameState.currentCountry = country;
+        
+        nameEl.classList.remove("suspense");
+        nameEl.textContent = country.name;
+        document.getElementById("country-flag").textContent = country.emoji;
+        
+        // Générer les boutons de jeu
+        let container = document.getElementById("game-buttons");
+        gameState.selectedCats.forEach(cat => {
+            let btn = document.createElement("button");
+            btn.textContent = cat;
+            btn.onclick = () => playTurn(cat);
+            container.appendChild(btn);
+        });
+        
+    }, 600); // Petit délai pour l'effet
+
+    document.getElementById("ui-tour").textContent = gameState.round;
+    document.getElementById("ui-score").textContent = gameState.score;
+}
+
+function playTurn(cat) {
+    let country = gameState.currentCountry;
+    let rank = country.ranks[cat];
+    
+    gameState.score += rank;
+    
+    // Calculer le meilleur choix possible parmi les cartes RESTANTES
+    let bestRank = 9999;
+    let bestCat = "";
+    gameState.selectedCats.forEach(c => {
+        if (country.ranks[c] < bestRank) {
+            bestRank = country.ranks[c];
+            bestCat = c;
+        }
+    });
+
+    // Feedback UI
+    document.getElementById("ui-feedback").textContent = `Rang obtenu : ${rank}ème`;
+    
+    // Historique
+    let list = document.getElementById("history-list");
+    let item = document.createElement("div");
+    item.className = "history-item";
+    
+    let html = `<strong>${country.emoji} ${country.name}</strong><br>
+    <span class="cat-desc">${cat} : ${CAT_CONFIG[cat].desc}</span><br>
+    Rang : <b>${rank}</b>`;
+    
+    if (cat === bestCat) {
+        html += `<div class="best-choice">✨ Excellent ! C'était le point fort.</div>`;
+    } else {
+        html += `<div class="missed-choice">💡 Fallait jouer : ${bestCat} (${bestRank}e)</div>`;
+    }
+    
+    item.innerHTML = html;
+    list.prepend(item);
+
+    // Enlever la catégorie jouée
+    gameState.selectedCats = gameState.selectedCats.filter(c => c !== cat);
+    gameState.round++;
+    
+    updateGameUI();
+}
+
+function endGame() {
+    document.getElementById("screen-game").classList.remove("active");
+    document.getElementById("screen-end").classList.add("active");
+    
+    let s = gameState.score;
+    document.getElementById("final-score").textContent = s;
+    
+    let msg = "";
+    if (s < 50) msg = "Génie Géopolitique 🏆";
+    else if (s < 150) msg = "Excellent Stratège 🥇";
+    else if (s < 300) msg = "Bonne connaissance du monde 🥈";
+    else msg = "Stagiaire de l'ONU 📚";
+    
+    document.getElementById("final-verdict").textContent = msg;
+}
+
+// Lancement
+init();
+
+</script>
+</body>
+</html>
