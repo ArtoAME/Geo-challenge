@@ -5,7 +5,7 @@ Merci d'avoir téléchargé le jeu Géo Challenge. Si tu ne sais pas comment lan
 Pour PC : Pour un lancement rapide, il te suffit de double-cliquer sur le fichier HTML, tu peux aussi créer un raccourci sur ton bureau.
 
 Pour Mobile :
-              iPhone : Vous pouvez télécharger l'application "Koder code editor" et importer le fichier HTML ou copier-coller le texte présent dans le téléchargement sous le nom "...".
+              iPhone : Vous pouvez télécharger l'application "Koder code editor" et importer le fichier HTML ou copier-coller le texte présent dans le téléchargement sous le nom "Géo challenge V1".
               Android : Téléchargez le fichier HTML et ouvrez-le sur Chrome ou autre.
 Pour les mobiles, vous pouvez créer des raccourcis pour avoir le jeu sur votre écran d'accueil de téléphone.
 
