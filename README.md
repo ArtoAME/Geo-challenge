@@ -9,5 +9,7 @@ Pour Mobile :
               Android : Téléchargez le fichier HTML et ouvrez-le sur Chrome ou autre.
 Pour les mobiles, vous pouvez créer des raccourcis pour avoir le jeu sur votre écran d'accueil de téléphone.
 
+Si ça ne marche pas, tu peux toujours utiliser le lien "https://gray-correy-10.tiiny.site" si tu as une connexion internet et que tu n'arrives pas à l'installer ; tu peux aussi faire un raccourci avec ce lien HTML.
+
 Profitez bien du jeu, j'essaierai d'ajouter de nouvelles mises à jour prochainement, revenez régulièrement si vous ne voulez pas rater les futures améliorations.
 Et n'hésitez pas à me contacter pour tout problème ou suggestion pour l'amélioration du jeu, je suis ouvert à toute proposition.
